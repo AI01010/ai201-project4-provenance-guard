@@ -27,11 +27,14 @@ W_LLM_SHORT = 0.85      # on short text, lean almost entirely on the LLM
 W_STYLE_SHORT = 0.15
 
 DISAGREEMENT_LIMIT = 0.40   # signals farther apart than this -> force "uncertain"
-# planning.md specced AI_THRESHOLD at 0.75. At 0.75 the evaluation
-# (data/evaluation_results.json) showed the system never confidently caught AI on
-# naturalistic text, so I lowered it to 0.70 — which recovered real true positives
-# with 0 false positives on my 24-sample human set. Honest cost: it does misfire
-# on harder formal/ESL writing (overlap in score-space). Documented in the README.
+# planning.md specced AI_THRESHOLD at 0.75. At 0.75 the system never confidently
+# caught AI on naturalistic text (see data/evaluation_results.json), so I lowered
+# it to 0.70 — which recovered real true positives with 0 false positives on my
+# 24-sample human eval set. The honest cost: formal / ESL human writing overlaps
+# with AI in score-space, so 0.70 DOES misfire on harder cases (the monetary-
+# policy example in the README is one). That's an unavoidable trade with these two
+# signals, and it's why appeals are a first-class feature. Documented as a spec
+# divergence in the README. Small-sample calibration; re-tune before prod.
 AI_THRESHOLD = 0.70         # raw >= this -> likely_ai   (narrow band on purpose)
 HUMAN_THRESHOLD = 0.40      # raw <= this -> likely_human (wide band on purpose)
 
@@ -40,3 +43,11 @@ SHORT_TEXT_FLOOR = 50       # words; below this, stylometrics is unreliable
 # --- Paths ---
 LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "audit.jsonl")
+
+# --- Rate limiting ---
+SUBMIT_RATE_LIMIT = "10 per minute;100 per day"
+
+# --- Content types (text is required; art_description is the multi-modal stretch) ---
+CONTENT_TEXT = "text"
+CONTENT_ART = "art_description"
+VALID_CONTENT_TYPES = {CONTENT_TEXT, CONTENT_ART}
