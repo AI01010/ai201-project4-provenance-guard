@@ -1,17 +1,15 @@
-"""Provenance Guard — Flask API (Milestone 3: submission endpoint + first signal).
+"""Provenance Guard — Flask API (Milestone 4: two signals + confidence scoring).
 
-This is the M3 slice. POST /submit mints a content_id, runs the FIRST detection
-signal (the Groq LLM judge), and returns a result with a placeholder confidence
-and label. Real confidence scoring is Milestone 4; the production layer — the
-three transparency labels, appeals, and rate limiting — is Milestone 5.
+POST /submit now runs BOTH detection signals and returns a real, calibrated
+confidence score plus each signal's individual score. The transparency label and
+the production layer (appeals, rate limiting) arrive in Milestone 5.
 """
 import uuid
 
 from flask import Flask, jsonify, request
 
 import audit
-from config import AI_THRESHOLD, HUMAN_THRESHOLD, LIKELY_AI, LIKELY_HUMAN, UNCERTAIN
-from llm_signal import llm_score
+from pipeline import analyze
 
 app = Flask(__name__)
 
@@ -19,7 +17,7 @@ app = Flask(__name__)
 @app.get("/")
 def index():
     return jsonify({
-        "service": "Provenance Guard (Milestone 3)",
+        "service": "Provenance Guard (Milestone 4)",
         "endpoints": {"POST /submit": "{text, creator_id}", "GET /log": "recent entries"},
     })
 
@@ -36,35 +34,37 @@ def submit():
         return jsonify({"error": "Field 'creator_id' is required."}), 400
 
     content_id = str(uuid.uuid4())
-    llm = llm_score(text)
-    p = llm["p_llm"]
-
-    # Placeholder verdict from signal 1 ALONE. The real, calibrated combination of
-    # two signals lands in Milestone 4 — this is just enough to prove the route.
-    if p >= AI_THRESHOLD:
-        attribution = LIKELY_AI
-    elif p <= HUMAN_THRESHOLD:
-        attribution = LIKELY_HUMAN
-    else:
-        attribution = UNCERTAIN
+    analysis = analyze(text)
+    result, signals = analysis["result"], analysis["signals"]
 
     audit.log_event({
         "event": "classification",
         "content_id": content_id,
         "creator_id": creator_id,
-        "attribution": attribution,
-        "llm_score": p,
-        "llm_reason": llm["reason"],
-        "confidence": None,
+        "attribution": result["verdict"],
+        "ai_likelihood": result["ai_likelihood"],
+        "confidence": result["confidence"],
+        "disagreement": result["disagreement"],
+        "llm_score": signals["llm"]["p_llm"],
+        "llm_reason": signals["llm"]["reason"],
+        "style_score": signals["style"]["p_style"],
+        "style_metrics": signals["style"]["metrics"],
+        "signals_used": ["llm_judge", "stylometrics"],
         "status": "classified",
     })
 
     return jsonify({
         "content_id": content_id,
         "creator_id": creator_id,
-        "attribution": attribution,
-        "confidence": None,                       # placeholder until M4
-        "signals": {"llm_score": p, "llm_reason": llm["reason"]},
+        "attribution": result["verdict"],
+        "confidence": result["confidence"],
+        "ai_likelihood": result["ai_likelihood"],
+        "signals": {
+            "llm_score": signals["llm"]["p_llm"],
+            "llm_reason": signals["llm"]["reason"],
+            "style_score": signals["style"]["p_style"],
+            "style_metrics": signals["style"]["metrics"],
+        },
         "label": "(transparency label added in Milestone 5)",
         "status": "classified",
     })
