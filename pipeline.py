@@ -11,8 +11,12 @@ from scoring import combine
 from stylometrics import stylometric_score
 
 
-def analyze(text, content_type=CONTENT_TEXT):
+def analyze(text, content_type=CONTENT_TEXT, appeal_context=None):
     """Run the full attribution pipeline on a piece of text.
+
+    When appeal_context is given (a creator's appeal reasoning), the LLM judge
+    re-scores the text in light of it. Stylometrics is unchanged: the structure of
+    the text is the same, only the semantic read gets the new context.
 
     Returns:
       {
@@ -22,7 +26,7 @@ def analyze(text, content_type=CONTENT_TEXT):
         "label": str,
       }
     """
-    llm = llm_score(text)
+    llm = llm_score(text, appeal_context=appeal_context)
     style = stylometric_score(text)
 
     result = combine(

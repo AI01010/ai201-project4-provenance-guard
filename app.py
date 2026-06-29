@@ -16,13 +16,15 @@ from flask import Flask, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+import appeals
 import audit
 from config import (
+    APPEAL_CAP,
     CONTENT_TEXT,
     SUBMIT_RATE_LIMIT,
     VALID_CONTENT_TYPES,
 )
-from labels import HEADLINE
+from labels import HEADLINE, make_label
 from pipeline import analyze
 
 app = Flask(__name__)
@@ -71,7 +73,7 @@ def submit():
     analysis = analyze(text, content_type=content_type)
     result, signals, label = analysis["result"], analysis["signals"], analysis["label"]
 
-    audit.log_classification(content_id, creator_id, content_type, result, signals, label)
+    audit.log_classification(content_id, creator_id, content_type, text, result, signals, label)
 
     return jsonify({
         "content_id": content_id,
@@ -97,6 +99,8 @@ def appeal():
     data = request.get_json(silent=True) or {}
     content_id = (data.get("content_id") or "").strip()
     reasoning = (data.get("creator_reasoning") or "").strip()
+    # The creator may resend their text; otherwise we use the one we stored.
+    text = (data.get("text") or "").strip()
 
     if not content_id:
         return jsonify({"error": "Field 'content_id' is required."}), 400
@@ -107,17 +111,55 @@ def appeal():
     if original is None:
         return jsonify({"error": f"No classification found for content_id {content_id}."}), 404
 
-    audit.log_appeal(content_id, reasoning, original)
+    text = text or original.get("text") or ""
+    appeal_number = audit.count_appeals(content_id) + 1
 
-    return jsonify({
+    # Re-evaluate with the creator's reasoning as context, then reweigh with
+    # diminishing trust. Needs the text; if we don't have it, we log the appeal
+    # without an automated re-decision (a human still reviews it).
+    revision = None
+    revised_label = None
+    if text:
+        reeval = analyze(text, content_type=original.get("content_type", CONTENT_TEXT),
+                         appeal_context=reasoning)
+        original_ai = original.get("ai_likelihood")
+        if original_ai is None:
+            original_ai = reeval["result"]["ai_likelihood"]
+        revision = appeals.reweigh(original_ai, reeval["result"], appeal_number)
+        revised_label = make_label(revision["revised_verdict"], revision["revised_confidence"])
+
+    audit.log_appeal(content_id, reasoning, original, revision=revision, revised_label=revised_label)
+
+    response = {
         "content_id": content_id,
         "status": "under_review",
-        "message": "Your appeal was received. This content is now under review by a "
-                   "human moderator. The original decision remains logged alongside "
-                   "your appeal.",
+        "appeal_number": appeal_number,
         "original_attribution": original.get("attribution"),
         "original_confidence": original.get("confidence"),
-    })
+        "message": "Your appeal was received and this content is now under review by "
+                   "a human moderator. The original decision remains logged.",
+    }
+    if revision:
+        response.update({
+            "revised_attribution": revision["revised_verdict"],
+            "revised_confidence": revision["revised_confidence"],
+            "revised_ai_likelihood": revision["revised_ai_likelihood"],
+            "revised_label": revised_label,
+            "appeal_trust": revision["trust"],
+            "message": "Your appeal was received. We re-reviewed the text in light of "
+                       "your explanation and updated our provisional assessment "
+                       f"(appeal #{appeal_number}). A human moderator will confirm. "
+                       "The original decision remains logged.",
+        })
+        if revision["saturated"]:
+            response["note"] = (f"You've reached the maximum re-weighting "
+                                f"({APPEAL_CAP} appeals). Further appeals won't change "
+                                f"the provisional assessment; a human will decide.")
+    else:
+        response["note"] = ("We couldn't re-evaluate automatically because the "
+                            "original text wasn't available. Resend it as 'text' to "
+                            "get a re-assessment. A human will still review your appeal.")
+    return jsonify(response)
 
 
 @app.get("/log")

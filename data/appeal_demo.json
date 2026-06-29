@@ -1,0 +1,36 @@
+[
+  {
+    "stage": "original",
+    "verdict": "likely_ai",
+    "confidence": 0.32,
+    "ai_likelihood": 0.7467
+  },
+  {
+    "stage": "appeal_1",
+    "trust": 0.3015,
+    "revised_ai_likelihood": 0.7211,
+    "verdict": "likely_ai",
+    "confidence": 0.33
+  },
+  {
+    "stage": "appeal_2",
+    "trust": 0.4778,
+    "revised_ai_likelihood": 0.7061,
+    "verdict": "likely_ai",
+    "confidence": 0.31
+  },
+  {
+    "stage": "appeal_3",
+    "trust": 0.6029,
+    "revised_ai_likelihood": 0.6955,
+    "verdict": "uncertain",
+    "confidence": 0.29
+  },
+  {
+    "stage": "appeal_4",
+    "trust": 0.7,
+    "revised_ai_likelihood": 0.6872,
+    "verdict": "uncertain",
+    "confidence": 0.28
+  }
+]

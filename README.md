@@ -10,10 +10,10 @@ The design is opinionated about one thing: on a writing platform, **falsely
 accusing a real writer is worse than missing an AI post.** Everything below leans
 that way — high bar to accuse, wide "uncertain" band, and an appeal path that's a
 first-class feature, not an afterthought. Full design rationale is in
-[planning.md](planning.md) (written before any code).
+[planning.md](planning.md).
 
 > **AI detection is an unsolved problem and I'm not pretending otherwise.** The
-> interesting engineering here isn't a magic accuracy number — it's communicating
+> interesting engineering here isn't a magic accuracy number, it's communicating
 > uncertainty honestly and giving creators a way to push back.
 
 ---
@@ -257,11 +257,44 @@ classification it contests (same `content_id`, line 3).
 
 The creator sends `content_id` + `creator_reasoning` to `POST /appeal`. The system
 looks up the original decision, flips status to `under_review`, appends the appeal
-to the log, and confirms — **no automated re-classification; a human owns the
-re-decision.** A reviewer's queue is every entry with `status == "under_review"`,
-showing the original verdict, both signal scores, and the creator's reasoning. The
-example above is the real one: a non-native English writer's formal prose got
-flagged `likely_ai`, they appealed, and it's now `under_review`.
+to the log (the original line is never rewritten), and confirms. A reviewer's queue
+is every entry with `status == "under_review"`, showing the original verdict, both
+signal scores, and the creator's reasoning. A human still owns the final call.
+
+### Appeal re-evaluation (diminishing-returns reweighting)
+
+An appeal isn't just a status flag, it's new information. So `/appeal` re-runs
+detection with the creator's reasoning handed to the LLM judge as context, and the
+judge is told to stay skeptical: a plausible account of *why* human writing looks
+AI-like (non-native English, formal training, heavy editing) can lower the score,
+but a bare "I wrote this, trust me" must not. That re-evaluation is then blended
+with the original by a **trust weight that grows on a log curve and saturates**:
+
+```
+trust(k) = 0.70 * ln(1 + k) / ln(1 + 4)     # k = appeal number, capped at 4
+revised_ai_likelihood = original*(1 - trust) + reevaluated*trust
+```
+
+Three properties make this safe instead of gameable:
+- **Diminishing returns.** The first appeal earns the most benefit-of-the-doubt; each later one earns less.
+- **Capped below 1.0.** Trust tops out at 0.70, so an appeal can *never* single-handedly flip a verdict. A human reviewer owns the rest.
+- **Empty appeals do nothing.** If the explanation doesn't actually lower the re-evaluated score, the blend doesn't move, no matter how many times you appeal.
+
+Real evidence (`scripts/appeal_demo.py`, live Groq) appealing the formal-human
+false positive with the same genuine ESL explanation each time:
+
+| stage | trust | revised ai_likelihood | verdict | confidence |
+|-------|------:|----------------------:|---------|-----------:|
+| original | — | 0.7467 | `likely_ai` ⚠️ | 0.32 |
+| appeal #1 | 0.30 | 0.7211 | `likely_ai` | 0.33 |
+| appeal #2 | 0.48 | 0.7061 | `likely_ai` | 0.31 |
+| appeal #3 | 0.60 | 0.6955 | `uncertain` | 0.29 |
+| appeal #4 | 0.70 | 0.6872 | `uncertain` | 0.28 |
+
+The wrong `likely_ai` accusation relaxes to `uncertain` by the third appeal, with
+visibly shrinking steps (0.026, 0.015, 0.011, 0.008) that saturate at the cap. It
+deliberately stops at `uncertain` rather than force-flipping to `likely_human`,
+because confirming a human is a human is the reviewer's job, not the system's.
 
 ---
 
@@ -357,10 +390,11 @@ app.py              Flask API: /submit /appeal /log /stats + rate limiting
 config.py           all thresholds, weights, label config (single source of truth)
 llm_signal.py       Signal 1 — Groq LLM judge
 stylometrics.py     Signal 2 — pure-Python structural metrics
-scoring.py          combine signals → verdict + confidence
+scoring.py          combine signals into verdict + confidence (shared decide())
 labels.py           the three transparency-label variants
+appeals.py          appeal re-evaluation (diminishing-returns reweighting)
 audit.py            append-only JSONL audit log
-pipeline.py         analyze(text) — the one path API + eval both use
+pipeline.py         analyze(text) the one path API + eval both use
 data/
   gather_data.py        scrape human + generate AI dataset
   samples.jsonl         43-sample labeled dataset
@@ -370,12 +404,13 @@ scripts/
   calibrate.py          run the 4 spec calibration inputs
   evaluate.py           full dataset evaluation
   capture_evidence.py   submissions + appeal + rate-limit evidence
-tests/                  34 pytest tests (no network — LLM stubbed)
+  appeal_demo.py        appeal reweighting demo (data/appeal_demo.json)
+tests/                  40 pytest tests (no network, LLM stubbed)
 planning.md         the spec, written before code
 ```
 
 ## Tests
 
-`python -m pytest tests -q` → **34 passed**. The signal/scoring/label/audit tests
-are deterministic; the API tests stub the LLM and redirect the log to a temp dir,
-so the suite needs no network and no API key.
+`python -m pytest tests -q` → **40 passed**. The signal/scoring/label/audit/appeal
+tests are deterministic; the API tests stub the LLM and redirect the log to a temp
+dir, so the suite needs no network and no API key.

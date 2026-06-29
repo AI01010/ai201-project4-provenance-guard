@@ -27,6 +27,27 @@ from config import (
 )
 
 
+def decide(raw, disagreement):
+    """Turn a combined AI-likelihood + signal disagreement into (verdict, confidence).
+
+    The single source of truth for the thresholds. Both combine() and the appeal
+    re-evaluation call this, so a normal classification and a re-scored appeal can
+    never apply different rules.
+    """
+    if disagreement > DISAGREEMENT_LIMIT:
+        verdict = UNCERTAIN
+    elif raw >= AI_THRESHOLD:
+        verdict = LIKELY_AI
+    elif raw <= HUMAN_THRESHOLD:
+        verdict = LIKELY_HUMAN
+    else:
+        verdict = UNCERTAIN
+
+    strength = abs(raw - 0.5) * 2                     # 0 at the fence, 1 at extremes
+    confidence = round(strength * (1 - disagreement), 2)
+    return verdict, confidence
+
+
 def combine(p_llm, p_style, word_count=None, style_reliable=True):
     """Combine two P(AI) signals into a verdict + confidence.
 
@@ -46,18 +67,7 @@ def combine(p_llm, p_style, word_count=None, style_reliable=True):
 
     raw = w_llm * p_llm + w_style * p_style          # weights sum to 1
     disagreement = abs(p_llm - p_style)
-
-    if disagreement > DISAGREEMENT_LIMIT:
-        verdict = UNCERTAIN
-    elif raw >= AI_THRESHOLD:
-        verdict = LIKELY_AI
-    elif raw <= HUMAN_THRESHOLD:
-        verdict = LIKELY_HUMAN
-    else:
-        verdict = UNCERTAIN
-
-    strength = abs(raw - 0.5) * 2                     # 0 at the fence, 1 at extremes
-    confidence = round(strength * (1 - disagreement), 2)
+    verdict, confidence = decide(raw, disagreement)
 
     return {
         "verdict": verdict,
