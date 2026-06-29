@@ -1,0 +1,100 @@
+{
+  "submissions": [
+    {
+      "case": "clearly AI",
+      "response": {
+        "ai_likelihood": 0.7931,
+        "attribution": "likely_ai",
+        "confidence": 0.56,
+        "content_id": "d210d5a8-585c-4447-bebe-77be2e30e876",
+        "content_type": "text",
+        "creator_id": "ai-writer-01",
+        "headline": "Likely AI-generated",
+        "label": "🤖 Likely AI-generated. Our analysis suggests this text was most likely produced by an AI tool. Two independent checks — a language-model review and a writing-style analysis — pointed the same way. We're only moderately confident in this estimate. No automated check is perfect. If you wrote this yourself, you can appeal and a person will review it. (confidence 56%)",
+        "signals": {
+          "llm_reason": "Generic phrasing and uniform rhythm dominate the passage.",
+          "llm_score": 0.8,
+          "style_metrics": {
+            "ai_tell_density": 2.667,
+            "ai_tell_hits": 8,
+            "burstiness_cv": 0.301,
+            "type_token_ratio": 0.878
+          },
+          "style_score": 0.7538
+        },
+        "status": "classified"
+      }
+    },
+    {
+      "case": "clearly human",
+      "response": {
+        "ai_likelihood": 0.1737,
+        "attribution": "likely_human",
+        "confidence": 0.6,
+        "content_id": "c51c410f-e85d-4329-9b91-cebbec540733",
+        "content_type": "text",
+        "creator_id": "human-writer-02",
+        "headline": "Likely written by a person",
+        "label": "✍️ Likely written by a person. Our analysis suggests this text was most likely written by a human. Both of our checks pointed the same way. We're only moderately confident in this estimate. This is our best estimate, not a guarantee. (confidence 60%)",
+        "signals": {
+          "llm_reason": "Passage contains specific lived detail and personal voice.",
+          "llm_score": 0.2,
+          "style_metrics": {
+            "ai_tell_density": 0.0,
+            "ai_tell_hits": 0,
+            "burstiness_cv": 0.611,
+            "type_token_ratio": 0.87
+          },
+          "style_score": 0.1249
+        },
+        "status": "classified"
+      }
+    },
+    {
+      "case": "formal human (borderline)",
+      "response": {
+        "ai_likelihood": 0.7467,
+        "attribution": "likely_ai",
+        "confidence": 0.32,
+        "content_id": "2ac9cfa9-bdf8-4755-bb94-b11d0359b25c",
+        "content_type": "text",
+        "creator_id": "human-writer-03",
+        "headline": "Likely AI-generated",
+        "label": "🤖 Likely AI-generated. Our analysis suggests this text was most likely produced by an AI tool. Two independent checks — a language-model review and a writing-style analysis — pointed the same way. Our confidence in this estimate is low. No automated check is perfect. If you wrote this yourself, you can appeal and a person will review it. (confidence 32%)",
+        "signals": {
+          "llm_reason": "Generic phrasing and absence of specific lived detail",
+          "llm_score": 0.8,
+          "style_metrics": {
+            "ai_tell_density": 0.0,
+            "ai_tell_hits": 0,
+            "burstiness_cv": 0.256,
+            "type_token_ratio": 0.86
+          },
+          "style_score": 0.4448
+        },
+        "status": "classified"
+      }
+    }
+  ],
+  "appeal": {
+    "content_id": "2ac9cfa9-bdf8-4755-bb94-b11d0359b25c",
+    "message": "Your appeal was received. This content is now under review by a human moderator. The original decision remains logged alongside your appeal.",
+    "original_attribution": "likely_ai",
+    "original_confidence": 0.32,
+    "status": "under_review"
+  },
+  "rate_limit_burst": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    429,
+    429,
+    429,
+    429,
+    429
+  ]
+}
