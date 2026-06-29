@@ -1,0 +1,21 @@
+# --- Secrets (NEVER commit) ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# --- Runtime logs (curated evidence lives in README + data/) ---
+logs/*.jsonl
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.idea/
