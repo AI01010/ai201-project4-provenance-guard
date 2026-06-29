@@ -7,9 +7,9 @@ The design is opinionated about one thing: on a writing platform, **falsely
 accusing a real writer is worse than missing an AI post.** Full design rationale
 lives in [planning.md](planning.md) (written before any code).
 
-> Built across milestones. **This branch is Milestone 3** — the submission
-> endpoint and the first detection signal. Confidence scoring (M4) and the
-> production layer — transparency labels, appeals, rate limiting (M5) — follow.
+> Built across milestones. **This branch is Milestone 4** — the detection pipeline
+> is now multi-signal with calibrated confidence scoring. The production layer
+> (transparency labels, appeals, rate limiting) is Milestone 5.
 
 ## Quickstart
 
@@ -21,24 +21,40 @@ cp .env.example .env              # add your Groq key (never committed)
 python app.py                     # http://127.0.0.1:5000
 ```
 
-```bash
-curl -s -X POST http://localhost:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "The sun dipped below the horizon...", "creator_id": "test-user-1"}'
-```
+## What works in Milestone 4
 
-## What works in Milestone 3
+- **Two distinct detection signals**, combined into one calibrated score:
+  - **Signal 1 — LLM judge** (Groq `llama-3.3-70b-versatile`): holistic semantic read, returns `P(AI)`.
+  - **Signal 2 — stylometrics** (pure Python): burstiness, type-token ratio, AI-tell density.
+- **Confidence scoring** (`scoring.py`): `raw = 0.65·p_llm + 0.35·p_style`, a
+  disagreement override that pushes conflicting signals to `uncertain`, and a
+  confidence that's high only when evidence is strong *and* the signals agree.
+- `POST /submit` returns the verdict, confidence, `ai_likelihood`, and **both**
+  individual signal scores. `GET /log` shows the extended audit entries.
 
-- `POST /submit` — mints a `content_id`, runs **Signal 1 (the Groq LLM judge)**,
-  returns the first-signal result with a placeholder confidence and label.
-- `GET /log` — returns recent audit entries (append-only JSONL at `logs/audit.jsonl`).
+## Validating the scores
+
+`data/gather_data.py` builds a real labeled dataset (PoetryDB + Wikipedia + Art
+Institute for humans, Groq for AI). `scripts/evaluate.py` runs it through the
+pipeline → `data/evaluation_results.json`. Headline: **0 false positives** on the
+human set, ~75% decisive accuracy, and a system that abstains (`uncertain`) rather
+than guess. `scripts/calibrate.py` runs the four spec calibration inputs.
+
+> **Spec divergence:** planning.md set the AI threshold at 0.75; the evaluation
+> showed nothing got confidently caught at 0.75, so I lowered it to 0.70 (details
+> in config.py and — fully — in the Milestone 5 README).
 
 ## Files
 
 ```
-app.py          Flask API: /submit (signal 1 + placeholders), /log
-config.py       thresholds + model config (single source of truth)
-llm_signal.py   Signal 1 — Groq LLM judge (returns P(AI) + a reason)
-audit.py        append-only JSONL audit log
-planning.md     the full spec, written before code
+app.py            Flask API: /submit (both signals + confidence), /log
+config.py         thresholds + weights (single source of truth)
+llm_signal.py     Signal 1 — Groq LLM judge
+stylometrics.py   Signal 2 — pure-Python structural metrics
+scoring.py        combine signals → verdict + confidence
+pipeline.py       analyze(text) — the one path API + eval both use
+audit.py          append-only JSONL audit log
+data/             gather_data.py, samples.jsonl, evaluation_results.json
+scripts/          calibrate.py, evaluate.py
+planning.md       the full spec, written before code
 ```
