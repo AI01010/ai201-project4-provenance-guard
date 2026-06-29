@@ -44,6 +44,17 @@ SHORT_TEXT_FLOOR = 50       # words; below this, stylometrics is unreliable
 LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "audit.jsonl")
 
+# --- Appeal re-evaluation (diminishing-returns reweighting) ---
+# An appeal re-runs detection with the creator's reasoning as context. We grant
+# the re-evaluation a "trust" weight that grows with each appeal but on a log
+# curve, saturating at APPEAL_MAX_TRUST by APPEAL_CAP appeals. It never reaches
+# 1.0, so an appeal can never single-handedly flip a verdict. A human still owns
+# the final call. This is the anti-gaming knob: appealing 50 times can't brute
+# force a flip, and a bogus "trust me" barely moves the score because the
+# re-evaluation LLM stays skeptical.
+APPEAL_MAX_TRUST = 0.70     # most the re-evaluation can ever weigh vs. the original
+APPEAL_CAP = 4              # appeals past this add no further trust (log saturates)
+
 # --- Rate limiting ---
 SUBMIT_RATE_LIMIT = "10 per minute;100 per day"
 

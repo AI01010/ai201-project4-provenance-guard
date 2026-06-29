@@ -51,39 +51,39 @@ Later, if the creator disagrees:
 
 ```
                           ┌──────────────────────────────────────────────┐
-                          │                 SUBMISSION FLOW                │
+                          │                 SUBMISSION FLOW              │
                           └──────────────────────────────────────────────┘
 
    raw text + creator_id
    POST /submit
           │
           ▼
-   ┌───────────────┐   text    ┌─────────────────────────┐
+   ┌───────────────┐   text    ┌──────────────────────────┐
    │  /submit      ├──────────►│ Signal 1: LLM judge      │  p_llm  (0–1, P(AI))
    │  route        │           │ Groq llama-3.3-70b       ├───────┐
    │  (Flask)      ├──────────►│ Signal 2: stylometrics   │       │
    └──────┬────────┘   text    │ pure Python              │ p_style (0–1, P(AI))
-          │                    └─────────────────────────┘       │
+          │                    └──────────────────────────┘       │
           │                                                       ▼
           │                                       ┌──────────────────────────────┐
           │   verdict + confidence + scores       │ Confidence scorer            │
           │◄──────────────────────────────────────┤ raw = 0.65·p_llm+0.35·p_style│
-          │                                        │ + disagreement override      │
-          │                                        └───────────────┬──────────────┘
-          │                                                        │ verdict
-          │                                                        ▼
+          │                                       │ + disagreement override      │
+          │                                       └───────────────┬──────────────┘
+          │                                                       │ verdict
+          │                                                       ▼
           │   label text                          ┌──────────────────────────────┐
           │◄──────────────────────────────────────┤ Label generator (3 variants) │
-          │                                        └───────────────┬──────────────┘
-          ▼                                                        │ full record
-   ┌───────────────┐   JSON                         ┌──────────────▼──────────────┐
-   │  response      │  {content_id, attribution,     │ Audit log (append-only JSONL)│
-   │  to caller     │   confidence, signals, label}  │ status: "classified"         │
-   └───────────────┘                                 └──────────────────────────────┘
+          │                                       └───────────────┬──────────────┘
+          ▼                                                       │ full record
+   ┌───────────────┐   JSON                        ┌──────────────▼───────────────┐
+   │  response     │  {content_id, attribution,    │ Audit log (append-only JSONL)│
+   │  to caller    │   confidence, signals, label} │ status: "classified"         │
+   └───────────────┘                               └──────────────────────────────┘
 
 
                           ┌──────────────────────────────────────────────┐
-                          │                  APPEAL FLOW                   │
+                          │                  APPEAL FLOW                 │
                           └──────────────────────────────────────────────┘
 
    content_id + creator_reasoning
@@ -92,9 +92,9 @@ Later, if the creator disagrees:
           ▼
    ┌───────────────┐  lookup   ┌──────────────────────────────┐
    │  /appeal      ├──────────►│ Audit log                    │
-   │  route        │  status:  │  • original entry stays       │
-   │               │  under_   │  • new appeal entry appended  │
-   │               │  review   │    next to the original       │
+   │  route        │  status:  │  • original entry stays      │
+   │               │  under_   │  • new appeal entry appended │
+   │               │  review   │    next to the original      │
    └──────┬────────┘           └──────────────────────────────┘
           │
           ▼
@@ -127,24 +127,24 @@ they *disagree*, that disagreement is itself information (and it pushes me towar
 - **What it measures:** holistic semantic + stylistic coherence. I prompt the
   model as a judge ("estimate the probability this text was AI-generated, 0.00–1.00,
   and give a one-line reason"), then parse out the number. This is the *LLM-as-judge*
-  pattern — the output feeds my pipeline, not the user.
+  pattern, the output feeds my pipeline, not the user.
 - **Output shape:** `p_llm ∈ [0,1]` = P(text is AI), plus a short rationale string I log.
 - **Why it's useful:** it's the only signal that "reads" the text the way a person
   would — catching the tell-tale flatness of generic AI prose, the over-hedged
   "it is important to note" register, the suspiciously even-handed structure.
 - **Its blind spots (if I can't name these I don't understand the signal):**
-  - It's confidently wrong sometimes — AI detection isn't something the model is actually reliable at, so I treat `p_llm` as one noisy vote, not gospel.
+  - It's confidently wrong sometimes. AI detection isn't something the model is actually reliable at, so I treat `p_llm` as one noisy vote, not truth.
   - It penalizes formal/uniform *human* writing (academic, ESL, technical) the same way it penalizes AI. Classic false-positive trap.
   - It can be talked around — lightly-edited AI text reads "human enough" and scores lower than it should.
 
 ### Signal 2 — Stylometric heuristics (pure Python, no external libs)
 
 - **What it measures:** structural statistics that tend to differ between human and
-  AI writing. AI text is *uniform*; human writing is *bursty* and irregular. I
+  AI writing. AI text is *uniform*; human writing is *punchy* and irregular. I
   compute three sub-metrics and fold them into one score:
-  1. **Sentence-length variance (burstiness)** — humans swing between short and long sentences; AI clusters around a comfortable medium. Low variance → more AI-like.
+  1. **Sentence-length variance (burstiness)** — humans swing between short and long sentences; AI clusters around a comfortable medium. Low variance => more AI-like.
   2. **Type-token ratio (vocabulary diversity)** — unique words ÷ total words. Very smooth, mid-range diversity reads AI-ish; humans are spikier (slang, repetition, odd word choices).
-  3. **"AI-tell" transition density** — rate of connective/hedge phrases AI overuses ("furthermore," "moreover," "it is important to note," "in conclusion," "delve," "in today's world"). High density → more AI-like.
+  3. **"AI-tell" transition density** — rate of connective/hedge phrases AI overuses ("furthermore," "moreover," "it is important to note," "in conclusion," "delve," "in today's world"). High density => more AI-like.
 - **Output shape:** `p_style ∈ [0,1]` = P(text is AI), a weighted blend of the three normalized sub-metrics.
 - **Why it's useful:** it's cheap, deterministic, has no idea what the text *means*,
   and can't be sweet-talked. It's a completely different failure surface from the LLM.
@@ -153,7 +153,7 @@ they *disagree*, that disagreement is itself information (and it pushes me towar
   - **Formal human prose scores AI-like** — academic and ESL writing is uniform and transition-heavy by nature. Same false-positive trap as Signal 1, for a different reason.
   - **Poetry / experimental writing breaks the assumptions** — heavy repetition + simple vocabulary tank the type-token ratio and look "uniform" even when a human clearly wrote it.
 
-### How I combine them
+### How I combine them:
 
 Weighted average, LLM trusted a bit more because it actually reads meaning:
 
@@ -223,9 +223,8 @@ Two deliberate choices here, both serving the false-positive bias:
 
 ### How I'll validate the scores are actually meaningful
 
-Not "trust me" — I'll run the four calibration inputs from the spec (clearly AI,
-clearly human, formal-human borderline, lightly-edited-AI borderline) and check
-that:
+I'll run the four calibration inputs from the spec (clearly AI, clearly human, formal-human borderline, lightly-edited-AI borderline) 
+and check that:
 - the clearly-AI and clearly-human cases land in opposite confident bands,
 - the two borderline cases land in **Uncertain** with visibly *lower* confidence,
 - and if any score contradicts my intuition, I print `p_llm` and `p_style`
@@ -276,12 +275,25 @@ could be an accusation also names the appeal path, because of the false-positive
   1. Looks up the original decision by `content_id`.
   2. Flips that content's status from `classified` → `under_review`.
   3. Appends a **new** audit entry (it does *not* overwrite the original) carrying the appeal reasoning, the original verdict, and a timestamp — so the two sit together in the log.
-  4. Returns a confirmation. **No automated re-classification** — a human owns the re-decision.
+  4. Returns a confirmation. A human owns the final re-decision (status stays `under_review`).
 - **What a reviewer sees in the queue:** every entry with `status == "under_review"`,
   showing the original verdict + confidence, *both* individual signal scores, the
   label that was shown, the creator's reasoning, and the timestamps. The individual
-  signal scores are the useful part — a reviewer can immediately see "ah, the LLM
+  signal scores are the useful part, a reviewer can immediately see "ah, the LLM
   flagged it but stylometrics said human, that's why it was borderline."
+
+### Appeal re-evaluation (added after M5)
+
+The original spec said "no automated re-classification." I changed my mind: an
+appeal carries real new information (the creator's reasoning), so it should be able
+to move the provisional verdict, just carefully. On `/appeal` the system re-runs
+detection with the reasoning handed to the LLM judge as skeptical context, then
+blends the re-evaluation into the original score with a **trust weight that grows on
+a log curve and saturates** (`trust(k) = 0.70 * ln(1+k) / ln(1+4)`, capped at 4
+appeals). Three guards keep it honest: diminishing returns per appeal, trust capped
+below 1.0 so an appeal can never flip a verdict by itself, and a skeptical
+re-evaluation so a bogus "trust me" doesn't move the score at all. A human still
+owns the final call. Evidence is in the README.
 
 ---
 

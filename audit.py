@@ -36,13 +36,18 @@ def log_event(record):
     return record
 
 
-def log_classification(content_id, creator_id, content_type, result, signals, label):
-    """Write a classification entry from a /submit result."""
+def log_classification(content_id, creator_id, content_type, text, result, signals, label):
+    """Write a classification entry from a /submit result.
+
+    We store the original text so an appeal can faithfully re-evaluate it later
+    (in production you'd keep the artifact in a content store, not the audit log).
+    """
     return log_event({
         "event": "classification",
         "content_id": content_id,
         "creator_id": creator_id,
         "content_type": content_type,
+        "text": text,
         "attribution": result["verdict"],
         "ai_likelihood": result["ai_likelihood"],
         "confidence": result["confidence"],
@@ -58,9 +63,14 @@ def log_classification(content_id, creator_id, content_type, result, signals, la
     })
 
 
-def log_appeal(content_id, creator_reasoning, original):
-    """Write an appeal entry next to the original classification."""
-    return log_event({
+def log_appeal(content_id, creator_reasoning, original, revision=None, revised_label=None):
+    """Write an appeal entry next to the original classification.
+
+    The original classification line is never rewritten. If a re-evaluation ran,
+    its revised (provisional) verdict is recorded here too. Status is always
+    under_review: the system proposes, a human disposes.
+    """
+    record = {
         "event": "appeal",
         "content_id": content_id,
         "creator_id": original.get("creator_id"),
@@ -69,7 +79,24 @@ def log_appeal(content_id, creator_reasoning, original):
         "original_label": original.get("label_shown"),
         "status": "under_review",
         "appeal_reasoning": creator_reasoning,
-    })
+    }
+    if revision:
+        record.update({
+            "appeal_number": revision["appeal_number"],
+            "appeal_trust": revision["trust"],
+            "revised_attribution": revision["revised_verdict"],
+            "revised_confidence": revision["revised_confidence"],
+            "revised_ai_likelihood": revision["revised_ai_likelihood"],
+            "reeval_ai_likelihood": revision["reeval_ai_likelihood"],
+            "revised_label": revised_label,
+        })
+    return log_event(record)
+
+
+def count_appeals(content_id):
+    """How many appeals have already been filed for this content_id."""
+    return sum(1 for e in read_log()
+               if e.get("content_id") == content_id and e.get("event") == "appeal")
 
 
 def read_log(limit=None):

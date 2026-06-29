@@ -11,13 +11,19 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
-def _fake_llm(text):
-    """Deterministic stand-in for the Groq judge: AI-tells push the score up."""
+def _fake_llm(text, appeal_context=None):
+    """Deterministic stand-in for the Groq judge: AI-tells push the score up.
+
+    When an appeal_context is supplied, simulate a convincing explanation by
+    lowering the AI estimate (the real judge stays skeptical; the stub just needs
+    to move so the reweighting machinery is exercised)."""
     low = (text or "").lower()
     tells = sum(t in low for t in ("furthermore", "moreover", "it is important",
                                    "stakeholders", "paradigm", "comprehensive"))
     casual = sum(t in low for t in ("honestly", "lol", "ok so", "gonna", "u "))
     p = 0.5 + 0.12 * tells - 0.15 * casual
+    if appeal_context:
+        p -= 0.30
     p = max(0.0, min(1.0, p))
     return {"p_llm": round(p, 4), "reason": "stub", "reliable": True}
 

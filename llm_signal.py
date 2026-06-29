@@ -27,6 +27,19 @@ _SYSTEM_PROMPT = (
     "Output nothing outside the JSON."
 )
 
+# Appended when re-scoring an appeal. The creator's explanation is new information,
+# but it is self-interested, so the judge stays skeptical: a plausible account of
+# WHY human writing looks AI-like (non-native English, formal training, heavy
+# editing) may lower the estimate; a bare claim of authorship must not.
+_APPEAL_PROMPT = (
+    "\n\nA creator is contesting an AI-generated label for this text and offers an "
+    "explanation (below). Re-assess p_ai taking the explanation into account, but "
+    "stay skeptical: anyone can claim they wrote something. Lower your estimate "
+    "ONLY if the explanation plausibly accounts for the AI-like features of the "
+    "text; do not lower it merely because authorship is asserted.\n"
+    "Creator's explanation: "
+)
+
 # Lazily-created client so importing this module never requires a key.
 _client = None
 
@@ -63,8 +76,13 @@ def _parse_p_ai(raw):
     raise ValueError(f"could not parse p_ai from: {raw!r}")
 
 
-def llm_score(text):
+def llm_score(text, appeal_context=None):
     """Return P(AI) from the LLM judge plus its rationale.
+
+    Args:
+      text:           the passage to judge
+      appeal_context: optional creator reasoning. When present, the judge re-scores
+                      the text in light of the explanation (skeptically).
 
     Returns:
       {"p_llm": float 0..1, "reason": str, "reliable": bool}
@@ -72,12 +90,16 @@ def llm_score(text):
     if not GROQ_API_KEY:
         return {"p_llm": 0.5, "reason": "llm_unavailable (no API key)", "reliable": False}
 
+    system = _SYSTEM_PROMPT
+    if appeal_context:
+        system = _SYSTEM_PROMPT + _APPEAL_PROMPT + str(appeal_context)
+
     try:
         client = _get_client()
         resp = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": text},
             ],
             temperature=0,
